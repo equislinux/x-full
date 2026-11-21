@@ -1,0 +1,7 @@
+# x-full kernel: published signed linux-x packages
+version	7.3.4.arch1-1
+base	https://downloads.sourceforge.net/project/equislinux/kernel/x86_64
+linux-x-7.3.4.arch1-1-x86_64.pkg.tar.zst
+linux-x-7.3.4.arch1-1-x86_64.pkg.tar.zst.sig
+linux-x-headers-7.3.4.arch1-1-x86_64.pkg.tar.zst
+linux-x-headers-7.3.4.arch1-1-x86_64.pkg.tar.zst.sig

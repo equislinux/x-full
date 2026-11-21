@@ -1,12 +1,17 @@
 # x-full — offline Hyprland edition
 
 `x-full` builds one install medium that carries everything the target needs:
-a prebuilt btrfs root image, the local package set for per-machine deltas,
-the X kernels, firmware/drivers, the virtualization stack and the equisdots
-desktop. **Installation does not contact any network.**
+a prebuilt root filesystem image (tar.zst), the X kernel, firmware/drivers,
+the virtualization stack, the NVIDIA packages and the equisdots desktop.
+**Installation does not contact any network.**
 
-Status: **scaffolding**. `build/x-full-build.sh doctor` checks the host;
-the build steps land next.
+Status: **first ISO built and boot-tested** (2026-11-21).
+
+- `x-full-2026.11.21-x86_64.iso` (5.2 GiB, signed) in `~/Downloads`.
+- Offline QEMU UEFI install with no NIC: ~45 s, then boots to SDDM/Hyprland
+  with `linux-x 7.3.4-arch1-1-x`.
+- Not included yet: `xtop-git`, `mpvpaper`, `bibata-cursor-theme` and
+  `networkmanager-dmenu-git`.
 
 ## Scope
 
@@ -33,25 +38,24 @@ the build steps land next.
 
 ## Build flow
 
-1. Fetch `x` and `archiso` at pinned revisions.
-2. Apply the `x-full` overlay: package lists, installer offline mode and
-   image-write phase.
-3. Build the local package set: Arch packages, prebuilt AUR packages and
-   X packages.
-4. Build the root image (btrfs, zstd).
-5. Build the live ISO with the root image and the local delta repository.
-6. Test the install offline in QEMU, sign the ISO and publish it to
-   SourceForge.
+1. Fetch `x`, `scripts`, the AUR recipes and the published `linux-x` packages
+   at the revisions in `manifests/`.
+2. Build the AUR packages and the equisdots config snapshot.
+3. Build the root filesystem with `xpm bootstrap` (Arch + `[x]` + AUR +
+   NVIDIA + the X kernel).
+4. Pack the root filesystem as `x-rootfs.tar.zst`.
+5. Build the live ISO with the root image and the X installer.
+6. Test the install offline in QEMU, sign the ISO and leave it in
+   `~/Downloads`; the SourceForge upload is manual.
 
 ## Layout
 
 ```
 x-full/
-├── build/            # fetch, overlay, repo, image, ISO, release
-├── configs/          # pacman build config, mirrorlists, profile deltas
-├── manifests/        # pinned x/archiso commits and package versions
-├── overlay/          # package lists, airootfs, installer patches
-├── recipes/          # PKGBUILD/XBUILD for X-specific and AUR packages
+├── build/            # x-full-build.sh (fetch, aur, smoke, rootfs, iso)
+├── configs/          # pacman build config
+├── manifests/        # pinned x/scripts/AUR commits, kernel and package lists
+├── overlay/          # installer image mode, hyprland offline patch, airootfs
 └── tests/            # offline install and boot assertions
 ```
 
@@ -59,8 +63,8 @@ x-full/
 
 - `archiso`, `devtools`, `pacman-contrib`, `erofs-utils` and `shellcheck`
   installed with xpm.
-- A populated pacman keyring (`pacman-key --init`, `pacman-key --populate
-  archlinux`) for `mkarchiso`/`pacstrap`.
+- A populated pacman keyring for `mkarchiso`/`pacstrap`; `prepare` creates it
+  with `pacman-key --init` and `pacman-key --populate archlinux` when missing.
 - Workspace keys restored (`<workspace>/keys`) and the SourceForge SSH key in
   `~/.ssh/id_ed25519_sourceforge`.
 - The narrow sudo rules installed with
@@ -72,10 +76,17 @@ x-full/
 # Host readiness report (no changes)
 ./build/x-full-build.sh doctor
 
-# Build steps (root; self-elevates through the sudo rules)
-./build/x-full-build.sh repo
-./build/x-full-build.sh image
+# Create the pacman keyring if missing (root)
+./build/x-full-build.sh prepare
+
+# Build steps (root; self-elevate through the sudo rules)
+./build/x-full-build.sh fetch
+./build/x-full-build.sh aur
+./build/x-full-build.sh smoke
+./build/x-full-build.sh rootfs
 ./build/x-full-build.sh iso
+
+# Everything, then copy the signed ISO to ~/Downloads
 ./build/x-full-build.sh all
 ```
 
