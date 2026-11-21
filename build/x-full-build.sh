@@ -90,6 +90,19 @@ prepare_host() {
     fi
 }
 
+repair_host() {
+    require_root "$@"
+    local uid
+    uid="$(id -u "$BUILD_USER")"
+    chown "$uid:$uid" "/run/user/$uid" 2>/dev/null || true
+    chmod 700 "/run/user/$uid" 2>/dev/null || true
+    ls -ld /run/user "/run/user/$uid" 2>&1
+    ls -la "/run/user/$uid" 2>&1 | head -20
+    printf '\n== cgroup ==\n'
+    findmnt /sys/fs/cgroup 2>&1 || true
+    ls -ld /sys/fs/cgroup 2>&1
+}
+
 doctor() {
     printf '== workspace ==\n'
     printf 'workspace: %s\nkeys:      %s\nroot:      %s\n\n' "$WS" "$KEYS" "$ROOT"
@@ -330,15 +343,23 @@ EOF
 bind_pseudo() {
     local root=$1
     mkdir -p "$root"/dev "$root"/proc "$root"/sys "$root"/run
+    # Make every bind rslave before exposing it, and keep /run private: the
+    # host's /run/user/<uid> and /sys/fs/cgroup must never be touched.
     mount --rbind /dev "$root/dev"
+    mount --make-rslave "$root/dev"
     mount --rbind /proc "$root/proc"
+    mount --make-rslave "$root/proc"
     mount --rbind /sys "$root/sys"
-    mount --rbind /run "$root/run"
+    mount --make-rslave "$root/sys"
+    mount -t tmpfs -o mode=755,nodev,nosuid tmpfs "$root/run"
 }
 
 unbind_pseudo() {
     local root=$1 p
-    for p in run sys proc dev; do
+    if mountpoint -q "$root/run"; then
+        umount "$root/run" 2>/dev/null || umount -l "$root/run" 2>/dev/null || true
+    fi
+    for p in sys proc dev; do
         mountpoint -q "$root/$p" && umount -R "$root/$p" 2>/dev/null || true
         mountpoint -q "$root/$p" && umount -Rl "$root/$p" 2>/dev/null || true
     done
@@ -378,15 +399,15 @@ prepare_rootfs() {
     trap 'unbind_pseudo "$ROOTFS"' EXIT
     xpm --config "$XPM_BUILD_CONF" bootstrap --root "$ROOTFS" \
         --dbpath "$ROOTFS/var/lib/xpm" --cachedir "$CACHE/xpm" \
-        --no-confirm --scriptlets=auto --no-shell-integration \
+        --no-confirm --scriptlets=skip --no-alpm-hooks --no-shell-integration \
         filesystem bash grep sed gawk coreutils findutils
     xpm --config "$XPM_BUILD_CONF" install --root "$ROOTFS" \
         --dbpath "$ROOTFS/var/lib/xpm" --cachedir "$CACHE/xpm" \
-        --no-confirm --scriptlets=auto --no-shell-integration --needed base
+        --no-confirm --scriptlets=skip --no-alpm-hooks --no-shell-integration --needed base
     log "xpm install target package set (${#pkgs[@]} packages)"
     xpm --config "$XPM_BUILD_CONF" install --root "$ROOTFS" \
         --dbpath "$ROOTFS/var/lib/xpm" --cachedir "$CACHE/xpm" \
-        --no-confirm --scriptlets=auto --no-shell-integration --needed "${pkgs[@]}"
+        --no-confirm --scriptlets=skip --no-alpm-hooks --no-shell-integration --needed "${pkgs[@]}"
     unbind_pseudo "$ROOTFS"
     trap - EXIT
 
@@ -400,14 +421,25 @@ prepare_rootfs() {
     (( ${#local_pkgs[@]} > 0 )) || die "no local packages; run fetch and aur first"
     xpm --config "$XPM_BUILD_CONF" install --root "$ROOTFS" \
         --dbpath "$ROOTFS/var/lib/xpm" --cachedir "$CACHE/xpm" \
-        --no-confirm --scriptlets=skip --needed "${local_pkgs[@]}"
+        --no-confirm --scriptlets=skip --no-alpm-hooks --needed "${local_pkgs[@]}"
 
     log "NVIDIA packages"
     local -a nv
     mapfile -t nv < <(grep -v '^#' "$ROOT/manifests/packages.nvidia" | sed '/^[[:space:]]*$/d')
     xpm --config "$XPM_BUILD_CONF" install --root "$ROOTFS" \
         --dbpath "$ROOTFS/var/lib/xpm" --cachedir "$CACHE/xpm" \
-        --no-confirm --scriptlets=skip --needed "${nv[@]}"
+        --no-confirm --scriptlets=skip --no-alpm-hooks --needed "${nv[@]}"
+
+    log "finalizing the image inside the chroot"
+    arch-chroot "$ROOTFS" ldconfig
+    arch-chroot "$ROOTFS" systemd-sysusers
+    arch-chroot "$ROOTFS" systemd-tmpfiles --create
+    if arch-chroot "$ROOTFS" test -x /usr/bin/update-ca-trust; then
+        arch-chroot "$ROOTFS" update-ca-trust
+    fi
+    arch-chroot "$ROOTFS" fc-cache -f >/dev/null 2>&1 || true
+    arch-chroot "$ROOTFS" glib-compile-schemas /usr/share/glib-2.0/schemas >/dev/null 2>&1 || true
+    arch-chroot "$ROOTFS" update-desktop-database >/dev/null 2>&1 || true
 
     log "equisdots snapshot and font"
     install -d "$ROOTFS/usr/share/x/config" "$ROOTFS/usr/share/fonts/HackNerdFont"
@@ -542,6 +574,7 @@ finalize() {
 case "${1:-}" in
     doctor) doctor ;;
     prepare) prepare_host "$@" ;;
+    repair-host) repair_host "$@" ;;
     fetch) fetch "$@" ;;
     aur) build_aur "$@" ;;
     smoke) smoke "$@" ;;
