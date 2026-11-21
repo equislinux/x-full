@@ -1,0 +1,39 @@
+# Build outputs
+/out/
+/work/
+/release/
+/vendor/
+/build-*.log
+*.log
+*.iso
+*.img
+*.img.zst
+*.squashfs
+*.efi
+*.pkg.tar.*
+*.sig
+*.sha256
+
+# Local caches and temporary state
+.cache/
+/tmp/
+__pycache__/
+*.pyc
+node_modules/
+
+# Secrets and private material
+/keys/
+*.key
+*.pem
+*.secret
+.env
+.env.*
+id_ed25519*
+!/*.example
+
+# Editors and OS metadata
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
