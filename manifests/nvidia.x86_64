@@ -1,0 +1,7 @@
+nvidia-open-dkms
+nvidia-utils
+nvidia-settings
+opencl-nvidia
+egl-wayland
+libva-nvidia-driver
+dkms

@@ -37,3 +37,19 @@ Thumbs.db
 .idea/
 .vscode/
 *.swp
+tests/.run/
+
+# Local-only option manifests (not used by the single edition)
+/manifests/agents.x86_64
+/manifests/full.x86_64
+/manifests/kde.x86_64
+/manifests/kernels.x86_64
+/manifests/niri.x86_64
+/manifests/virt.x86_64
+
+# Binary assets fetched by the build; keep the repo scripts-only
+/assets/*.ttf
+/assets/x-repo.pub
+*.tar.zst
+*.tar.xz
+*.tar.gz
