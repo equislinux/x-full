@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+# Launch kitty with the org x-trail shader on hardware GPUs.
+#
+# Under software renderers (llvmpipe/softpipe/swrast, typical in VMs) the
+# always-on trail shader can make typing unresponsive. In that case launch
+# kitty with a copy of the user's config without the shader lines. The shader
+# package, its slangc compiler and the precompiled pipeline stay installed and
+# are used on real GPUs. Set KITTY_FORCE_SHADERS=1 to keep them everywhere.
+set -euo pipefail
+
+real=/usr/bin/kitty
+if [[ ! -x $real ]]; then
+    printf 'kitty: %s is missing\n' "$real" >&2
+    exit 1
+fi
+
+confdir="${XDG_CONFIG_HOME:-$HOME/.config}/kitty"
+conf="$confdir/kitty.conf"
+
+if [[ ${KITTY_FORCE_SHADERS:-0} != 1 && -f $conf ]] && command -v glxinfo >/dev/null 2>&1; then
+    renderer="$(glxinfo -B 2>/dev/null | sed -n 's/^OpenGL renderer string: //p' | head -1)"
+    if [[ $renderer =~ (llvmpipe|softpipe|swrast) ]]; then
+        fallback="$confdir/kitty-no-shaders.conf"
+        if [[ ! -f $fallback || $conf -nt $fallback ]]; then
+            sed -E '/^[[:space:]]*(custom_shaders|cursor_trail|cursor_trail_start_threshold)[[:space:]]/d' \
+                "$conf" > "$fallback.tmp"
+            mv "$fallback.tmp" "$fallback"
+        fi
+        exec "$real" --config "$fallback" "$@"
+    fi
+fi
+
+exec "$real" "$@"

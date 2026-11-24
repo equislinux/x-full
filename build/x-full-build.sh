@@ -627,6 +627,7 @@ PY
     if [[ ! -x $root/usr/bin/slangc ]]; then
         warn "slangc (shader-slang) is missing; kitty custom shaders may not load"
     fi
+    install -Dm755 "$ROOT/overlay/kitty" "$root/usr/local/bin/kitty"
 
     install -d "$root/usr/share/fonts/HackNerdFont"
     install -m 0644 "$font" "$root/usr/share/fonts/HackNerdFont/HackNerdFont-Regular.ttf"

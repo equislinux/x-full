@@ -5,21 +5,28 @@ base system, the **current equisdots org** desktop, `linux-x`, NVIDIA/DKMS and
 the tools the desktop needs. **Installation does not contact any network and
 does not resolve packages.**
 
-Status: built and verified (2026-11-23). ISO `x-full-2026.11.23-x86_64.iso`
-(4.17 GB). Offline QEMU installs measured **23-24 s** (UEFI/BIOS) and
+Status: built and verified (2026-11-24). ISO `x-full-2026.11.24-x86_64.iso`
+(4.17 GB). Offline QEMU installs measured **24-39 s** (UEFI/BIOS) and
 **~48 s with LUKS2** (the single initramfs rebuild). Every variant boots to
 `graphical.target`, accepts the user login, validates the installed Hyprland
-configuration, and checks Firefox plus the kitty shader assets.
+configuration, and checks Firefox, the kitty shader assets and, with `NET=1`,
+NetworkManager/DHCP in the installed system.
 `tests/offline-install.sh` enforces a 90 s install budget.
 
 ## Scope
 
 - One desktop: **Hyprland + the current equisdots org stack** (shell, plugins,
   timex, palettes, xturing, background, login theme, kitty cursor-trail shader).
-- **Firefox** is included in the image. The kitty trail keeps the org
-  `x-trail` shader with `shader-slang`/`slangc` and the precompiled pipeline;
-  the start threshold is raised so typing does not trigger the shader on every
-  key (important under software rendering).
+- **Firefox** is included. NetworkManager, `wpa_supplicant`, `wireless-regdb`
+  and the common `linux-firmware` sets are included, so wired and Wi-Fi use
+  the same NetworkManager stack as Omarchy; the shell panel drives `nmcli` and
+  `nmtui` is the terminal fallback.
+- The kitty trail keeps the org `x-trail` shader with
+  `shader-slang`/`slangc` and the precompiled pipeline. A small
+  `/usr/local/bin/kitty` wrapper keeps the shader on hardware GPUs and uses a
+  shader-free copy of the config only under llvmpipe/softpipe/swrast (VMs);
+  `KITTY_FORCE_SHADERS=1` overrides it. The start threshold is also raised so
+  typing does not trigger the shader on every key.
 - One kernel: **linux-x** (+ headers for DKMS).
 - NVIDIA drivers are prebuilt in the image; the installer only adds the
   `nvidia-drm` kernel parameters when an NVIDIA GPU is present.
@@ -132,23 +139,25 @@ and checks Firefox plus the kitty shader pipeline/slangc:
 ```bash
 tests/offline-install.sh                         # newest out/*.iso (UEFI, GRUB)
 LUKS=1 tests/offline-install.sh                  # LUKS2, passphrase injected
+NET=1 tests/offline-install.sh                   # add a virtio NIC; verify DHCP/nmcli
 BOOT=systemd-boot tests/offline-install.sh       # UEFI systemd-boot
 BIOS=1 tests/offline-install.sh                  # SeaBIOS + GRUB
 LOGIN_CHECK=0 tests/offline-install.sh           # skip the login/config check
 ```
 
-Measured on this host with QEMU/KVM, no NIC: UEFI/BIOS 23-24 s, LUKS2 ~48 s.
-Real hardware will vary.
+Measured on this host with QEMU/KVM: UEFI/BIOS 24-39 s, LUKS2 ~48 s, and the
+`NET=1` variant verifies NetworkManager/DHCP. Real hardware will vary.
 
 ## Known issues / WIP
 
-- **Kitty:** the org `x-trail` shader, `shader-slang`/`slangc` and the
-  precompiled pipeline ship in the image; the cursor-trail start threshold and
-  repaint delay are tuned for software renderers. Full typing/input validation
-  inside the installed Hyprland session is still in progress.
-- **Network:** NetworkManager and Firefox are installed, but post-install
-  connectivity and browsing have not been validated yet (the test runs with no
-  NIC). The installer itself is offline by design. This is the next work item.
+- **Kitty:** the org `x-trail` shader, `shader-slang`/`slangc`, the precompiled
+  pipeline and the software-renderer fallback are in the image. The test
+  verifies the assets; full typing/input validation inside a logged-in
+  Hyprland session is still the remaining check.
+- **Network:** Ethernet/NetworkManager/DHCP is verified with `NET=1` in QEMU.
+  Real Wi-Fi hardware has not been tested (the common firmware, regulatory
+  database and modules are included). The installer itself stays offline by
+  design.
 - **Release:** the full ISO destined for the SourceForge `full` folder has not
   been uploaded. Publication happens in a later session; only the repository
   changes are pushed now.

@@ -21,6 +21,7 @@ LUKS="${LUKS:-0}"
 LOGIN_CHECK="${LOGIN_CHECK:-1}"
 BOOT="${BOOT:-grub}"
 BIOS="${BIOS:-0}"
+NET="${NET:-0}"
 OVMF_CODE="${OVMF_CODE:-/usr/share/edk2/x64/OVMF_CODE.4m.fd}"
 OVMF_VARS="${OVMF_VARS:-/usr/share/edk2/x64/OVMF_VARS.4m.fd}"
 
@@ -66,8 +67,18 @@ fi
 # shellcheck disable=SC2054  # commas inside -drive values
 qemu_common+=(
     -drive if=virtio,format=qcow2,file="$RUN/disk.qcow2"
-    -nic none -display none -no-reboot
+    -display none -no-reboot
 )
+if [[ $NET == 1 ]]; then
+    # shellcheck disable=SC2054
+    qemu_common+=(-nic user,model=virtio-net-pci)
+else
+    qemu_common+=(-nic none)
+fi
+net_cmd=""
+if [[ $NET == 1 ]]; then
+    net_cmd='for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do nmcli -t -f STATE g 2>/dev/null | grep -q connected && break; sleep 1; done; nmcli -t -f DEVICE,STATE,CONNECTION device status; ping -c1 -W3 10.0.2.2 >/dev/null 2>&1 && echo MARK-NET-OK'
+fi
 
 append="archisobasedir=arch archisosearchuuid=$ISO_UUID console=ttyS0,115200"
 append+=" xfull.auto=1 xfull.disk=/dev/vda xfull.mode=wipe xfull.esp=2"
@@ -110,7 +121,8 @@ if [[ $BOOT_CHECK == 1 ]]; then
         ( sleep 15; printf 'test\n'; sleep 15; printf 'x\n'; sleep 2; printf 'test\n'; \
           sleep 2; printf 'id\n'; sleep 1; printf 'Hyprland --verify-config >/dev/null 2>&1 && echo MARK-CONFIG-OK\n'; \
           sleep 1; printf 'firefox --version >/dev/null 2>&1 && echo MARK-BROWSER-OK\n'; \
-          sleep 1; printf "command -v kitty >/dev/null 2>&1 && test -f \"\$HOME/.config/kitty/shaders/x-trail.pipeline\" && command -v slangc >/dev/null 2>&1 && echo MARK-KITTY-OK\n"; \
+          sleep 1; printf "command -v kitty >/dev/null 2>&1 && test -x /usr/local/bin/kitty && test -f \"\$HOME/.config/kitty/shaders/x-trail.pipeline\" && command -v slangc >/dev/null 2>&1 && echo MARK-KITTY-OK\n"; \
+          sleep 1; printf '%s\n' "$net_cmd"; \
           sleep 2; printf 'echo MARK-LOGIN-OK\n'; sleep 4 ) | \
             timeout --foreground "$BOOT_TIMEOUT" qemu-system-x86_64 "${qemu_common[@]}" \
                 -serial stdio > "$RUN/boot.log" 2>&1 &
@@ -118,13 +130,14 @@ if [[ $BOOT_CHECK == 1 ]]; then
         ( sleep 20; printf 'x\n'; sleep 2; printf 'test\n'; \
           sleep 2; printf 'id\n'; sleep 1; printf 'Hyprland --verify-config >/dev/null 2>&1 && echo MARK-CONFIG-OK\n'; \
           sleep 1; printf 'firefox --version >/dev/null 2>&1 && echo MARK-BROWSER-OK\n'; \
-          sleep 1; printf "command -v kitty >/dev/null 2>&1 && test -f \"\$HOME/.config/kitty/shaders/x-trail.pipeline\" && command -v slangc >/dev/null 2>&1 && echo MARK-KITTY-OK\n"; \
+          sleep 1; printf "command -v kitty >/dev/null 2>&1 && test -x /usr/local/bin/kitty && test -f \"\$HOME/.config/kitty/shaders/x-trail.pipeline\" && command -v slangc >/dev/null 2>&1 && echo MARK-KITTY-OK\n"; \
+          sleep 1; printf '%s\n' "$net_cmd"; \
           sleep 2; printf 'echo MARK-LOGIN-OK\n'; sleep 4 ) | \
             timeout --foreground "$BOOT_TIMEOUT" qemu-system-x86_64 "${qemu_common[@]}" \
                 -serial stdio > "$RUN/boot.log" 2>&1 &
     fi
     qpid=$!
-    booted=0; logged=0; config_ok=0; browser_ok=0; kitty_ok=0
+    booted=0; logged=0; config_ok=0; browser_ok=0; kitty_ok=0; net_ok=0
     for ((i = 0; i < BOOT_TIMEOUT; i += 2)); do
         if grep -qE 'Graphical Interface|Simple Desktop Display Manager|Startup finished in' "$RUN/boot.log" 2>/dev/null; then
             booted=1
@@ -133,7 +146,9 @@ if [[ $BOOT_CHECK == 1 ]]; then
         if grep -q 'MARK-CONFIG-OK' "$RUN/boot.log" 2>/dev/null; then config_ok=1; fi
         if grep -q 'MARK-BROWSER-OK' "$RUN/boot.log" 2>/dev/null; then browser_ok=1; fi
         if grep -q 'MARK-KITTY-OK' "$RUN/boot.log" 2>/dev/null; then kitty_ok=1; fi
-        if (( logged == 1 && config_ok == 1 && browser_ok == 1 && kitty_ok == 1 )); then break; fi
+        if grep -q 'MARK-NET-OK' "$RUN/boot.log" 2>/dev/null; then net_ok=1; fi
+        if (( logged == 1 && config_ok == 1 && browser_ok == 1 && kitty_ok == 1 )) \
+           && [[ $NET != 1 || $net_ok == 1 ]]; then break; fi
         if (( booted == 1 )) && [[ $LOGIN_CHECK != 1 ]]; then break; fi
         if ! kill -0 "$qpid" 2>/dev/null; then break; fi
         sleep 2
@@ -148,11 +163,15 @@ if [[ $BOOT_CHECK == 1 ]]; then
         tail -n 90 "$RUN/boot.log" 2>/dev/null || true
         die "the installed system did not verify login, Hyprland config, Firefox and kitty shaders"
     fi
+    if [[ $NET == 1 ]] && (( net_ok != 1 )); then
+        tail -n 90 "$RUN/boot.log" 2>/dev/null || true
+        die "the installed system did not obtain network connectivity"
+    fi
     say "installed system reached graphical.target"
     if [[ $LOGIN_CHECK == 1 ]]; then say "user login, Hyprland config, Firefox and kitty shaders verified"; fi
 fi
 
-say "PASS  install=${seconds}s  boot=${BOOT}  luks=${LUKS}  bios=${BIOS}  login=${LOGIN_CHECK}"
+say "PASS  install=${seconds}s  boot=${BOOT}  luks=${LUKS}  bios=${BIOS}  login=${LOGIN_CHECK}  net=${NET}"
 say "disk: $RUN/disk.qcow2"
 if [[ $KEEP != 1 ]]; then
     rm -rf "$RUN"
