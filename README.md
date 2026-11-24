@@ -6,7 +6,7 @@ the tools the desktop needs. **Installation does not contact any network and
 does not resolve packages.**
 
 Status: built and verified (2026-11-24). ISO `x-full-2026.11.24-x86_64.iso`
-(4.17 GB). Offline QEMU installs measured **24-39 s** (UEFI/BIOS) and
+(4.17 GB). Offline QEMU installs measured **24-65 s** (UEFI/BIOS, depending on host load) and
 **~48 s with LUKS2** (the single initramfs rebuild). Every variant boots to
 `graphical.target`, accepts the user login, validates the installed Hyprland
 configuration, and checks Firefox, the kitty shader assets and, with `NET=1`,
@@ -25,9 +25,10 @@ NetworkManager/DHCP/DNS in the installed system.
   `shader-slang`/`slangc` and the precompiled pipeline. A small
   `/usr/local/bin/kitty` wrapper keeps the shader on hardware GPUs and uses a
   shader-free copy of the config only under llvmpipe/softpipe/swrast (VMs);
-  `glxinfo`, `eglinfo` and `hyprctl` are tried without aborting the launcher.
-  `KITTY_FORCE_SHADERS=1` overrides it. The start threshold is raised so typing
-  does not trigger the shader on every key.
+  `glxinfo`, `eglinfo` and `hyprctl` are tried without aborting the launcher;
+  `systemd-detect-virt` also disables the shader in VMs. `KITTY_FORCE_SHADERS=1`
+  overrides it. The start threshold is raised so typing does not trigger the
+  shader on every key.
 - One kernel: **linux-x** (+ headers for DKMS).
 - NVIDIA drivers are prebuilt in the image; the installer only adds the
   `nvidia-drm` kernel parameters when an NVIDIA GPU is present.
@@ -152,12 +153,13 @@ Measured on this host with QEMU/KVM: UEFI/BIOS 24-39 s, LUKS2 ~48 s, and the
 ## Known issues / WIP
 
 - **Kitty:** the org `x-trail` shader, `shader-slang`/`slangc`, the precompiled
-  pipeline and the software-renderer fallback are in the image. The test
+  pipeline and the VM/software-renderer fallback are in the image. The test
   verifies the assets; full typing/input validation inside a logged-in
   Hyprland session is still the remaining check.
 - **Network:** Ethernet/NetworkManager/DHCP/DNS is verified with `NET=1` in
   QEMU. NetworkManager is forced to write `/etc/resolv.conf` from DHCP
-  (`rc-manager=file`), avoiding a dangling systemd-resolved stub. Real Wi-Fi
+  (`rc-manager=file`), avoiding a dangling systemd-resolved stub, and a
+  dispatcher adds public DNS only if DHCP provided none. Real Wi-Fi
   hardware has not been tested (the common firmware, regulatory database and
   modules are included). The installer itself stays offline by design.
 - **Release:** the full ISO destined for the SourceForge `full` folder has not

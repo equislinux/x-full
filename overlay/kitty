@@ -28,7 +28,7 @@ if [[ ${KITTY_FORCE_SHADERS:-0} != 1 && -f $conf ]]; then
     if [[ -z $renderer && -n ${HYPRLAND_INSTANCE_SIGNATURE:-} ]] && command -v hyprctl >/dev/null 2>&1; then
         renderer="$(hyprctl systeminfo 2>/dev/null)" || true
     fi
-    if [[ $renderer =~ (llvmpipe|softpipe|swrast) ]]; then
+    if systemd-detect-virt --quiet 2>/dev/null || [[ $renderer =~ (llvmpipe|softpipe|swrast) ]]; then
         fallback="$confdir/kitty-no-shaders.conf"
         if [[ ! -f $fallback || $conf -nt $fallback ]]; then
             sed -E '/^[[:space:]]*(custom_shaders|cursor_trail|cursor_trail_start_threshold)[[:space:]]/d' \

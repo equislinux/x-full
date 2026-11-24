@@ -1,0 +1,10 @@
+#!/bin/sh
+# NetworkManager dispatcher: if DHCP did not provide DNS, use public resolvers.
+case "${2:-}" in
+    up|dhcp4-change|dhcp6-change) ;;
+    *) exit 0 ;;
+esac
+
+if ! grep -qs '^nameserver' /etc/resolv.conf; then
+    printf 'nameserver 1.1.1.1\nnameserver 8.8.8.8\n' > /etc/resolv.conf
+fi

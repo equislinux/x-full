@@ -804,6 +804,8 @@ build_target() {
 dns=default
 rc-manager=file
 EOF
+    install -Dm755 "$ROOT/overlay/nm-dns-fallback" \
+        "$TARGET_ROOTFS/etc/NetworkManager/dispatcher.d/90-x-full-dns"
     # The zsh scriptlet is skipped with --scriptlets=skip; login and SDDM use
     # pam_shells, so the shell must be listed explicitly.
     local sh
