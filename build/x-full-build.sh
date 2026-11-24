@@ -796,6 +796,14 @@ build_target() {
         arch-chroot "$TARGET_ROOTFS" update-ca-trust
     fi
     arch-chroot "$TARGET_ROOTFS" fc-cache -f >/dev/null 2>&1 || true
+    # NetworkManager must write /etc/resolv.conf itself; auto can leave a
+    # dangling systemd-resolved stub in images without the resolver daemon.
+    install -d "$TARGET_ROOTFS/etc/NetworkManager/conf.d"
+    cat > "$TARGET_ROOTFS/etc/NetworkManager/conf.d/10-x-full-dns.conf" <<'EOF'
+[main]
+dns=default
+rc-manager=file
+EOF
     # The zsh scriptlet is skipped with --scriptlets=skip; login and SDDM use
     # pam_shells, so the shell must be listed explicitly.
     local sh

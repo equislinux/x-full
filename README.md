@@ -10,7 +10,7 @@ Status: built and verified (2026-11-24). ISO `x-full-2026.11.24-x86_64.iso`
 **~48 s with LUKS2** (the single initramfs rebuild). Every variant boots to
 `graphical.target`, accepts the user login, validates the installed Hyprland
 configuration, and checks Firefox, the kitty shader assets and, with `NET=1`,
-NetworkManager/DHCP in the installed system.
+NetworkManager/DHCP/DNS in the installed system.
 `tests/offline-install.sh` enforces a 90 s install budget.
 
 ## Scope
@@ -25,8 +25,9 @@ NetworkManager/DHCP in the installed system.
   `shader-slang`/`slangc` and the precompiled pipeline. A small
   `/usr/local/bin/kitty` wrapper keeps the shader on hardware GPUs and uses a
   shader-free copy of the config only under llvmpipe/softpipe/swrast (VMs);
-  `KITTY_FORCE_SHADERS=1` overrides it. The start threshold is also raised so
-  typing does not trigger the shader on every key.
+  `glxinfo`, `eglinfo` and `hyprctl` are tried without aborting the launcher.
+  `KITTY_FORCE_SHADERS=1` overrides it. The start threshold is raised so typing
+  does not trigger the shader on every key.
 - One kernel: **linux-x** (+ headers for DKMS).
 - NVIDIA drivers are prebuilt in the image; the installer only adds the
   `nvidia-drm` kernel parameters when an NVIDIA GPU is present.
@@ -146,7 +147,7 @@ LOGIN_CHECK=0 tests/offline-install.sh           # skip the login/config check
 ```
 
 Measured on this host with QEMU/KVM: UEFI/BIOS 24-39 s, LUKS2 ~48 s, and the
-`NET=1` variant verifies NetworkManager/DHCP. Real hardware will vary.
+`NET=1` variant verifies NetworkManager/DHCP/DNS. Real hardware will vary.
 
 ## Known issues / WIP
 
@@ -154,10 +155,11 @@ Measured on this host with QEMU/KVM: UEFI/BIOS 24-39 s, LUKS2 ~48 s, and the
   pipeline and the software-renderer fallback are in the image. The test
   verifies the assets; full typing/input validation inside a logged-in
   Hyprland session is still the remaining check.
-- **Network:** Ethernet/NetworkManager/DHCP is verified with `NET=1` in QEMU.
-  Real Wi-Fi hardware has not been tested (the common firmware, regulatory
-  database and modules are included). The installer itself stays offline by
-  design.
+- **Network:** Ethernet/NetworkManager/DHCP/DNS is verified with `NET=1` in
+  QEMU. NetworkManager is forced to write `/etc/resolv.conf` from DHCP
+  (`rc-manager=file`), avoiding a dangling systemd-resolved stub. Real Wi-Fi
+  hardware has not been tested (the common firmware, regulatory database and
+  modules are included). The installer itself stays offline by design.
 - **Release:** the full ISO destined for the SourceForge `full` folder has not
   been uploaded. Publication happens in a later session; only the repository
   changes are pushed now.

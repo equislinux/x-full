@@ -77,7 +77,7 @@ else
 fi
 net_cmd=""
 if [[ $NET == 1 ]]; then
-    net_cmd='for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do nmcli -t -f STATE g 2>/dev/null | grep -q connected && break; sleep 1; done; nmcli -t -f DEVICE,STATE,CONNECTION device status; ping -c1 -W3 10.0.2.2 >/dev/null 2>&1 && echo MARK-NET-OK'
+    net_cmd='for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do nmcli -t -f STATE g 2>/dev/null | grep -q connected && break; sleep 1; done; nmcli -t -f DEVICE,STATE,CONNECTION device status; ping -c1 -W3 10.0.2.2 >/dev/null 2>&1 && echo MARK-NET-OK; getent hosts archlinux.org >/dev/null 2>&1 && echo MARK-DNS-OK'
 fi
 
 append="archisobasedir=arch archisosearchuuid=$ISO_UUID console=ttyS0,115200"
@@ -137,7 +137,7 @@ if [[ $BOOT_CHECK == 1 ]]; then
                 -serial stdio > "$RUN/boot.log" 2>&1 &
     fi
     qpid=$!
-    booted=0; logged=0; config_ok=0; browser_ok=0; kitty_ok=0; net_ok=0
+    booted=0; logged=0; config_ok=0; browser_ok=0; kitty_ok=0; net_ok=0; dns_ok=0
     for ((i = 0; i < BOOT_TIMEOUT; i += 2)); do
         if grep -qE 'Graphical Interface|Simple Desktop Display Manager|Startup finished in' "$RUN/boot.log" 2>/dev/null; then
             booted=1
@@ -147,8 +147,9 @@ if [[ $BOOT_CHECK == 1 ]]; then
         if grep -q 'MARK-BROWSER-OK' "$RUN/boot.log" 2>/dev/null; then browser_ok=1; fi
         if grep -q 'MARK-KITTY-OK' "$RUN/boot.log" 2>/dev/null; then kitty_ok=1; fi
         if grep -q 'MARK-NET-OK' "$RUN/boot.log" 2>/dev/null; then net_ok=1; fi
+        if grep -q 'MARK-DNS-OK' "$RUN/boot.log" 2>/dev/null; then dns_ok=1; fi
         if (( logged == 1 && config_ok == 1 && browser_ok == 1 && kitty_ok == 1 )) \
-           && [[ $NET != 1 || $net_ok == 1 ]]; then break; fi
+           && [[ $NET != 1 || ( $net_ok == 1 && $dns_ok == 1 ) ]]; then break; fi
         if (( booted == 1 )) && [[ $LOGIN_CHECK != 1 ]]; then break; fi
         if ! kill -0 "$qpid" 2>/dev/null; then break; fi
         sleep 2
@@ -163,9 +164,9 @@ if [[ $BOOT_CHECK == 1 ]]; then
         tail -n 90 "$RUN/boot.log" 2>/dev/null || true
         die "the installed system did not verify login, Hyprland config, Firefox and kitty shaders"
     fi
-    if [[ $NET == 1 ]] && (( net_ok != 1 )); then
+    if [[ $NET == 1 ]] && (( net_ok != 1 || dns_ok != 1 )); then
         tail -n 90 "$RUN/boot.log" 2>/dev/null || true
-        die "the installed system did not obtain network connectivity"
+        die "the installed system did not obtain network connectivity and DNS"
     fi
     say "installed system reached graphical.target"
     if [[ $LOGIN_CHECK == 1 ]]; then say "user login, Hyprland config, Firefox and kitty shaders verified"; fi

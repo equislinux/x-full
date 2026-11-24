@@ -17,8 +17,17 @@ fi
 confdir="${XDG_CONFIG_HOME:-$HOME/.config}/kitty"
 conf="$confdir/kitty.conf"
 
-if [[ ${KITTY_FORCE_SHADERS:-0} != 1 && -f $conf ]] && command -v glxinfo >/dev/null 2>&1; then
-    renderer="$(glxinfo -B 2>/dev/null | sed -n 's/^OpenGL renderer string: //p' | head -1)"
+if [[ ${KITTY_FORCE_SHADERS:-0} != 1 && -f $conf ]]; then
+    renderer=""
+    if command -v glxinfo >/dev/null 2>&1; then
+        renderer="$(glxinfo -B 2>/dev/null | sed -n 's/^OpenGL renderer string: //p' | head -1)" || true
+    fi
+    if [[ -z $renderer ]] && command -v eglinfo >/dev/null 2>&1; then
+        renderer="$(eglinfo 2>/dev/null | sed -n 's/.*OpenGL renderer string: //p' | head -1)" || true
+    fi
+    if [[ -z $renderer && -n ${HYPRLAND_INSTANCE_SIGNATURE:-} ]] && command -v hyprctl >/dev/null 2>&1; then
+        renderer="$(hyprctl systeminfo 2>/dev/null)" || true
+    fi
     if [[ $renderer =~ (llvmpipe|softpipe|swrast) ]]; then
         fallback="$confdir/kitty-no-shaders.conf"
         if [[ ! -f $fallback || $conf -nt $fallback ]]; then
